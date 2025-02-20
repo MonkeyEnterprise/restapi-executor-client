@@ -1,4 +1,4 @@
-# REST API Executor client v1.0.0
+# REST API Executor Client v1.0.0
 ![REST API Executor Server](assets/api-rest-log.png "REST API Executor Server")
 
 ## **1. How to Start the Docker Container**
