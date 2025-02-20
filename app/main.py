@@ -18,19 +18,16 @@ def get_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description="Start the Flask API server.")
     
-    parser.add_argument("--host", type=str, default=os.getenv("HOST", "127.0.0.1"), help="Host IP address")
-    parser.add_argument("--port", type=int, default=int(os.getenv("PORT", 80)), help="Port number")
-    parser.add_argument("--api_key", type=str, default=os.getenv("API_KEY", ""), help="API Key")
-        
-    debug_env = os.getenv("DEBUG", "False").lower()
-    debug_default = debug_env in {"1", "true", "yes"}
-    parser.add_argument("--debug", action="store_true", default=debug_default, help="Enable debug mode")
+    parser.add_argument("--server_url", type=str, default=os.getenv("SERVER_URL", "http://127.0.0.1:80"), help="REST API Server URL")
+    parser.add_argument("--propresenter_url", type=str, default=os.getenv("PROPRESENTER_URL", "http://127.0.0.1:5000"), help="ProPresenter URL")
+    parser.add_argument("--api_key", type=str, default=os.getenv("API_KEY", "your_secret_api_key"), help="API Key")
+    parser.add_argument("--debug", action="store_true", default=os.getenv("DEBUG", "False").lower() in ["true", "1"], help="Enable debug logging")
+
     args, _ = parser.parse_known_args()
     
     return args
 
 if __name__ == "__main__":
     args = get_args()
-    server = Client(host=args.host, port=args.port, debug=args.debug, api_key=args.api_key)
+    server = Client(server_url=args.server_url, propresenter_url=args.propresenter_url, api_key=args.api_key, debug=args.debug)
     server.run()
-

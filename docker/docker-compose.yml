@@ -12,7 +12,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: propresenter_message_client_container
     environment:
-      - HOST=127.0.0.5
-      - PORT=80
-      - DEBUG=true
+      - SERVER_URL=http://127.0.0.1:80
+      - PROPRESENTER_URL=http://localhost:5000
       - API_KEY=your_secret_api_key
+      - DEBUG=true
