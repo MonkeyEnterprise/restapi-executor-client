@@ -1,0 +1,18 @@
+##
+#
+# Copyright (c) 2025, Lorenzo Pouw.
+# All rights reserved.
+#
+##
+
+services:
+  propresenter_message_client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: propresenter_message_client_container
+    environment:
+      - HOST=127.0.0.5
+      - PORT=80
+      - DEBUG=true
+      - API_KEY=your_secret_api_key

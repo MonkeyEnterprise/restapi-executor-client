@@ -1,0 +1,8 @@
+##
+#
+# Copyright (c) 2025, Lorenzo Pouw.
+# All rights reserved.
+#
+##
+
+requests >= 2.32.3 

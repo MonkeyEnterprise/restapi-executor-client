@@ -1,0 +1,20 @@
+//
+//
+// Copyright (c) 2025, Lorenzo Pouw.
+// All rights reserved.
+//
+//
+
+{
+	"folders": [
+		{
+			"path": "./"
+		}
+	],
+	"settings": {
+		"cSpell.ignoreWords": [
+			"propresenter",
+			"levelname"
+		]
+	}
+}
