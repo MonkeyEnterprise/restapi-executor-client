@@ -3,25 +3,26 @@ import requests
 from typing import Any, Tuple, Optional, Dict
 
 class APIClient:
-    def __init__(self, server_url: str, headers: Optional[dict] = None) -> None:
+    def __init__(self, server_url: str, headers: Optional[dict] = None, timeout: int = 5) -> None:
         """
         Base class for HTTP requests with error handling.
 
         Args:
             server_url (str): The base URL of the server.
+            timeout (int): Timeout in seconds for the requests.
             headers (dict, optional): Headers for authentication or other purposes.
         """
         self.server_url = server_url
         self.headers = headers or {}
+        self.timeout = timeout
         self._last_result: Optional[Tuple[bool, Any]] = None
 
-    def get(self, endpoint: str, timeout: int = 5, status_codes: Dict = [200]) -> Tuple[bool, Any]:
+    def get(self, endpoint: str, status_codes: Dict = [200]) -> Tuple[bool, Any]:
         """
         Executes a GET request to the specified endpoint.
         
         Args:
             endpoint (str): The endpoint to send the GET request to.
-            timeout (int): Timeout in seconds for the request.
             status_codes (Dict): Expected successful status codes.
         
         Returns:
@@ -30,7 +31,7 @@ class APIClient:
         try:
             url = f"{self.server_url}{endpoint}"
             logging.debug(f"Sending GET request to: {url} with headers: {self.headers}")
-            response = requests.get(url, headers=self.headers, timeout=timeout)
+            response = requests.get(url, headers=self.headers, timeout=self.timeout)
             if response.status_code in status_codes:
                 try:
                     json_data = response.json()
@@ -48,14 +49,13 @@ class APIClient:
             logging.error(f"GET request failed: {e}")
             return False, None
 
-    def post(self, endpoint: str, data: Dict[str, Any], timeout: int = 5, status_codes: Dict = [200]) -> Tuple[bool, Any]:
+    def post(self, endpoint: str, data: Dict[str, Any], status_codes: Dict = [200]) -> Tuple[bool, Any]:
         """
         Executes a POST request to the specified endpoint.
         
         Args:
             endpoint (str): The endpoint to send the POST request to.
             data (Dict[str, Any]): The data to send in the POST request.
-            timeout (int): Timeout in seconds for the request.
             status_codes (Dict): Expected successful status codes.
         
         Returns:
@@ -64,7 +64,7 @@ class APIClient:
         try:
             url = f"{self.server_url}{endpoint}"
             logging.debug(f"Sending POST request to: {url} with headers: {self.headers} and data: {data}")
-            response = requests.post(url, json=data, headers=self.headers, timeout=timeout)
+            response = requests.post(url, json=data, headers=self.headers, timeout=self.timeout)
             if response.status_code in status_codes:
                 try:
                     json_data = response.json()
@@ -82,13 +82,12 @@ class APIClient:
             logging.error(f"POST request failed: {e}")
             return False, None
 
-    def delete(self, endpoint: str, timeout: int = 5, status_codes: Dict = [200, 204]) -> Tuple[bool, Any]:
+    def delete(self, endpoint: str, status_codes: Dict = [200, 204]) -> Tuple[bool, Any]:
         """
         Executes a DELETE request to the specified endpoint.
         
         Args:
             endpoint (str): The endpoint to send the DELETE request to.
-            timeout (int): Timeout in seconds for the request.
             status_codes (Dict): Expected successful status codes.
         
         Returns:
@@ -97,7 +96,7 @@ class APIClient:
         try:
             url = f"{self.server_url}{endpoint}"
             logging.debug(f"Sending DELETE request to: {url} with headers: {self.headers}")
-            response = requests.delete(url, headers=self.headers, timeout=timeout)
+            response = requests.delete(url, headers=self.headers, timeout=self.timeout)
             if response.status_code in status_codes:
                 return True, None  # No body needed for a successful deletion
             else:

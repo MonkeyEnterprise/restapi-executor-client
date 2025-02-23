@@ -22,7 +22,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--server_url",
         type=str,
-        default=os.getenv("SERVER_URL", "http://192.168.100.21:80"),
+        default=os.getenv("SERVER_URL", "http://localhost:80"),
         help="REST API Server URL (default from SERVER_URL environment variable)."
     )
     parser.add_argument(

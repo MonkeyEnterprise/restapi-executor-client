@@ -72,19 +72,38 @@ class Client:
                 return
             time.sleep(5)
 
-    def execute_main_script(self):
-        """
-        Executes the main logic while both servers are online.
-        """
         while self.server_online() and self.propresenter_online() and not self.shutdown_flag:
             try:
                 logging.info("Main script running.")
-                time.sleep(5)
-            except Exception as e:
-                logging.error(f"Error during main script execution: {e}")
-                break  # Exit the loop on error
+                connection_state, data = self.server.get_commands()
+                if connection_state and data:
+                    for command in data:
+                        if isinstance(command, dict):
+                            cmd_type = command.get('command')
+                            message = command.get('message', '')
+                            uuid = command.get('uuid', '')
 
-        logging.info("One of the servers has gone offline. Rechecking connections...")
+                            match cmd_type:
+                                case 'trigger':
+                                    self.propresenter.trigger(
+                                        id="parentpager",
+                                        token="number",
+                                        message=message
+                                    )
+                                    time.sleep(10) # needs to be variable
+                                    self.propresenter.clear(id="parentpager")
+                                case 'clear':
+                                    self.propresenter.clear(id="parentpager")
+                                case _:
+                                    logging.warning(f"Unknown command received: {cmd_type}")
+
+                            self.server.clear_commands()
+                time.sleep(0.1)
+            except Exception as e:
+                logging.exception("Error during main script execution:")
+                break  # Exit the loop on error
+            
+            logging.info("One of the servers has gone offline. Rechecking connections...")
 
     def server_online(self) -> bool:
         """
