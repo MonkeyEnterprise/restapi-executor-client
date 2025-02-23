@@ -5,30 +5,33 @@
 #
 ##
 
-
+from .propresenter import ProPresenter
+from .server import Server
 import logging
-import requests
 import time
 import signal
 
 __VERSION__: str = "1.0.0"
 
 class Client:
-    def __init__(self, server_url: str, propresenter_url: str, api_key: str, debug: bool = False) -> None:
-        """Initializes the client."""
+    def __init__(self, server_url: str, propresenter_url: str, api_key: str, debug: bool) -> None:
+        """
+        Initializes the ProPresenter client.
+
+        Args:
+            server_url (str): URL of the REST API Executor server.
+            propresenter_url (str): URL of the ProPresenter server.
+            api_key (str): API key for server authentication.
+            debug (bool): Enables debug-level logging if True.
+        """
         log_level = logging.DEBUG if debug else logging.INFO
         logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
 
-        logging.info(f"Initializing ProPresenter client version {__VERSION__} with debug={debug}")
-
-        self.server_url = server_url
-        self.pp_url = propresenter_url
-        self.api_key = api_key
-        self.debug = debug
+        logging.info(f"Initializing ProPresenter client version {__VERSION__}")
+        
+        self.server = Server(server_url, api_key)
+        self.propresenter = ProPresenter(propresenter_url)
         self.shutdown_flag = False  # Flag to handle graceful shutdown
-
-        # Setup headers with API key for requests
-        self.headers = {'X-API-Key': self.api_key}
 
         # Register signal handlers
         signal.signal(signal.SIGINT, self.handle_shutdown)  # Handle Ctrl+C
@@ -40,34 +43,83 @@ class Client:
         self.shutdown_flag = True
 
     def run(self) -> None:
-        """Starts the client."""
+        """Starts the main loop and handles shutdown gracefully."""
         logging.info("Client started. Press Ctrl+C to stop.")
-        while not self.shutdown_flag:
-            self.check()
+
+        try:
+            while not self.shutdown_flag:
+                self.wait_for_servers_online()
+                logging.info("Both servers are online. Executing main script.")
+                self.execute_main_script()
+        except KeyboardInterrupt:
+            logging.info("Manual interruption detected. Shutting down...")
+        except Exception as e:
+            logging.error(f"Unexpected error: {e}")
+        finally:
+            logging.info("Client has shut down completely.")
+
+    def wait_for_servers_online(self):
+        """
+        Blocks until both servers are online or a shutdown is requested.
+        """
+        logging.info("Checking if both servers are online...")
+        while not (self.server_online() and self.propresenter_online()):
+            if not self.server_online():
+                logging.warning("REST API Executor server is offline. Retrying in 5 seconds...")
+            if not self.propresenter_online():
+                logging.warning("ProPresenter server is offline. Retrying in 5 seconds...")
+            if self._should_shutdown():
+                return
             time.sleep(5)
 
-        logging.info("Client shutdown complete.")
+    def execute_main_script(self):
+        """
+        Executes the main logic while both servers are online.
+        """
+        while self.server_online() and self.propresenter_online() and not self.shutdown_flag:
+            try:
+                logging.info("Main script running.")
+                time.sleep(5)
+            except Exception as e:
+                logging.error(f"Error during main script execution: {e}")
+                break  # Exit the loop on error
 
-    def check(self) -> None:
-        """Checks the server status and retrieves data."""
+        logging.info("One of the servers has gone offline. Rechecking connections...")
+
+    def server_online(self) -> bool:
+        """
+        Checks if the REST API Executor server is online.
+
+        Returns:
+            bool: True if the server is online, False otherwise.
+        """
         try:
-            url = f"{self.server_url}/api/v1"
-            logging.debug(f"Sending request to: {url} with headers: {self.headers}")
+            return self.server.get_status()[0]
+        except Exception as e:
+            logging.error(f"Error checking server status: {e}")
+            return False
 
-            response = requests.get(url, headers=self.headers, timeout=5)
-            logging.debug(f"Received response: {response.status_code} {response.reason}")
+    def propresenter_online(self) -> bool:
+        """
+        Checks if the ProPresenter server is online.
 
-            if response.status_code == 200:
-                logging.info("Successfully fetched data.")
-                logging.debug(f"Response Headers: {response.headers}")
-                logging.debug(f"Response Body: {response.text}")
-                return response.json()
-            else:
-                logging.error(f"Server error: {response.status_code} - {response.text}")
+        Returns:
+            bool: True if the server is online, False otherwise.
+        """
+        try:
+            return self.propresenter.version()[0]
+        except Exception as e:
+            logging.error(f"Error checking ProPresenter server status: {e}")
+            return False
 
-        except requests.exceptions.Timeout:
-            logging.error("Request timeout occurred.")
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Request error: {e}")
+    def _should_shutdown(self) -> bool:
+        """
+        Checks if a shutdown has been requested.
 
-        return []
+        Returns:
+            bool: True if shutdown has been requested, False otherwise.
+        """
+        if self.shutdown_flag:
+            logging.info("Shutdown requested. Stopping server checks.")
+            return True
+        return False

@@ -1,0 +1,69 @@
+##
+# Copyright (c) 2025, Lorenzo Pouw.
+# All rights reserved.
+##
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.log
+*.sqlite3
+*.db
+*.dmg
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Docker
+*.dockerfile
+docker-compose.override.yml
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+.dmypy.json.
+
+# Pylint
+pylint-report.txt
+pylint-global-section.txt
+
+# pytest
+.cache/
+
+# Coverage reports
+.coverage
+coverage.xml
+*.cover
+*.py,cover
+
+# Build artifacts
+*.tar.gz
+*.deb
+*.rpm
+*.tgz
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
