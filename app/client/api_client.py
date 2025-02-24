@@ -1,6 +1,6 @@
 import logging
 import requests
-from typing import Any, Tuple, Optional, Dict
+from typing import Any, Tuple, Optional, List, Dict
 
 class APIClient:
     def __init__(self, server_url: str, headers: Optional[dict] = None, timeout: int = 5) -> None:
@@ -17,94 +17,59 @@ class APIClient:
         self.timeout = timeout
         self._last_result: Optional[Tuple[bool, Any]] = None
 
-    def get(self, endpoint: str, status_codes: Dict = [200]) -> Tuple[bool, Any]:
+    def _make_request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None, 
+                      status_codes: List[int] = [200]) -> Tuple[bool, Any]:
         """
-        Executes a GET request to the specified endpoint.
-        
+        Helper method to make HTTP requests (GET, POST, DELETE).
+
         Args:
-            endpoint (str): The endpoint to send the GET request to.
-            status_codes (Dict): Expected successful status codes.
-        
+            method (str): HTTP method ('GET', 'POST', or 'DELETE').
+            endpoint (str): The endpoint to send the request to.
+            data (Optional[Dict[str, Any]]): Data to be sent in the request (for POST).
+            status_codes (List[int]): Expected successful status codes.
+
         Returns:
-            Tuple[bool, Any]: (True, JSON response) if successful, otherwise (False, None or error message).
+            Tuple[bool, Any]: (True, response data) if successful, otherwise (False, error message).
         """
         try:
             url = f"{self.server_url}{endpoint}"
-            logging.debug(f"Sending GET request to: {url} with headers: {self.headers}")
-            response = requests.get(url, headers=self.headers, timeout=self.timeout)
+            request_data = {'headers': self.headers, 'timeout': self.timeout}
+            
+            if method == 'POST':
+                request_data['json'] = data
+                logging.debug(f"Sending POST request to: {url} with data: {data}")
+                response = requests.post(url, **request_data)
+            elif method == 'DELETE':
+                logging.debug(f"Sending DELETE request to: {url}")
+                response = requests.delete(url, **request_data)
+            else:  # Default to GET
+                logging.debug(f"Sending GET request to: {url}")
+                response = requests.get(url, **request_data)
+            
             if response.status_code in status_codes:
                 try:
-                    json_data = response.json()
-                    return True, json_data
+                    return True, response.json()
                 except ValueError:
-                    logging.error("GET request returned non-JSON response.")
+                    logging.error(f"{method} request returned non-JSON response.")
                     return False, response.text
             else:
-                logging.error(f"GET error: {response.status_code} - {response.text}")
+                logging.error(f"{method} request failed with status {response.status_code}: {response.text}")
                 return False, None
         except requests.exceptions.Timeout:
-            logging.error("GET request timed out.")
+            logging.error(f"{method} request timed out.")
             return False, None
         except requests.exceptions.RequestException as e:
-            logging.error(f"GET request failed: {e}")
+            logging.error(f"{method} request failed: {e}")
             return False, None
 
-    def post(self, endpoint: str, data: Dict[str, Any], status_codes: Dict = [200]) -> Tuple[bool, Any]:
-        """
-        Executes a POST request to the specified endpoint.
-        
-        Args:
-            endpoint (str): The endpoint to send the POST request to.
-            data (Dict[str, Any]): The data to send in the POST request.
-            status_codes (Dict): Expected successful status codes.
-        
-        Returns:
-            Tuple[bool, Any]: (True, JSON response) if successful, otherwise (False, None or error message).
-        """
-        try:
-            url = f"{self.server_url}{endpoint}"
-            logging.debug(f"Sending POST request to: {url} with headers: {self.headers} and data: {data}")
-            response = requests.post(url, json=data, headers=self.headers, timeout=self.timeout)
-            if response.status_code in status_codes:
-                try:
-                    json_data = response.json()
-                    return True, json_data
-                except ValueError:
-                    logging.error("POST request returned non-JSON response.")
-                    return False, response.text
-            else:
-                logging.error(f"POST error: {response.status_code} - {response.text}")
-                return False, None
-        except requests.exceptions.Timeout:
-            logging.error("POST request timed out.")
-            return False, None
-        except requests.exceptions.RequestException as e:
-            logging.error(f"POST request failed: {e}")
-            return False, None
+    def get(self, endpoint: str, status_codes: List[int] = [200]) -> Tuple[bool, Any]:
+        """Executes a GET request."""
+        return self._make_request('GET', endpoint, status_codes=status_codes)
 
-    def delete(self, endpoint: str, status_codes: Dict = [200, 204]) -> Tuple[bool, Any]:
-        """
-        Executes a DELETE request to the specified endpoint.
-        
-        Args:
-            endpoint (str): The endpoint to send the DELETE request to.
-            status_codes (Dict): Expected successful status codes.
-        
-        Returns:
-            Tuple[bool, Any]: (True, None) if successful, otherwise (False, None).
-        """
-        try:
-            url = f"{self.server_url}{endpoint}"
-            logging.debug(f"Sending DELETE request to: {url} with headers: {self.headers}")
-            response = requests.delete(url, headers=self.headers, timeout=self.timeout)
-            if response.status_code in status_codes:
-                return True, None  # No body needed for a successful deletion
-            else:
-                logging.error(f"DELETE error: {response.status_code} - {response.text}")
-                return False, None
-        except requests.exceptions.Timeout:
-            logging.error("DELETE request timed out.")
-            return False, None
-        except requests.exceptions.RequestException as e:
-            logging.error(f"DELETE request failed: {e}")
-            return False, None
+    def post(self, endpoint: str, data: Dict[str, Any], status_codes: List[int] = [200]) -> Tuple[bool, Any]:
+        """Executes a POST request."""
+        return self._make_request('POST', endpoint, data=data, status_codes=status_codes)
+
+    def delete(self, endpoint: str, status_codes: List[int] = [200, 204]) -> Tuple[bool, Any]:
+        """Executes a DELETE request."""
+        return self._make_request('DELETE', endpoint, status_codes=status_codes)
