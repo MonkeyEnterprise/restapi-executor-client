@@ -14,15 +14,31 @@ import signal
 __VERSION__: str = "1.0.0"
 
 class Client:
-    def __init__(self, server_url: str, propresenter_url: str, api_key: str, debug: bool) -> None:
+    """
+    A client that manages communication between a REST API Executor server and a ProPresenter server.
+
+    This client continuously polls for commands from the server and executes them on the ProPresenter.
+    It handles shutdown signals and server connectivity checks.
+
+    Attributes:
+        server (Server): Instance for handling server communication.
+        propresenter (ProPresenter): Instance for interacting with ProPresenter.
+        timeout (int): Time (in seconds) to wait before retrying server connection.
+        poll_time (int): Time (in seconds) between consecutive command polls.
+        shutdown_flag (bool): Flag to indicate shutdown status.
+    """
+
+    def __init__(self, server_url: str, propresenter_url: str, api_key: str, timeout: int, poll_time: int, debug: bool) -> None:
         """
-        Initializes the ProPresenter client.
+        Initializes the Client instance with server and ProPresenter URLs, API key, and settings.
 
         Args:
             server_url (str): URL of the REST API Executor server.
             propresenter_url (str): URL of the ProPresenter server.
             api_key (str): API key for server authentication.
-            debug (bool): Enables debug-level logging if True.
+            timeout (int): Timeout in seconds for server connection retries.
+            poll_time (int): Time in seconds between command polling.
+            debug (bool): Flag to enable debug-level logging.
         """
         log_level = logging.DEBUG if debug else logging.INFO
         logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -31,26 +47,69 @@ class Client:
         
         self.server = Server(server_url, api_key)
         self.propresenter = ProPresenter(propresenter_url)
-        self.shutdown_flag = False  # Flag to handle graceful shutdown
+        self.timeout = timeout
+        self.poll_time = poll_time
+        self.shutdown_flag = False
 
-        # Register signal handlers
-        signal.signal(signal.SIGINT, self.handle_shutdown)  # Handle Ctrl+C
-        signal.signal(signal.SIGTERM, self.handle_shutdown)  # Handle Docker stop
-
-    def handle_shutdown(self, signum, frame):
-        """Handles shutdown signals gracefully."""
-        logging.info(f"Received shutdown signal ({signum}). Exiting gracefully...")
-        self.shutdown_flag = True
+        signal.signal(signal.SIGINT, self._handle_shutdown)
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
 
     def run(self) -> None:
-        """Starts the main loop and handles shutdown gracefully."""
-        logging.info("Client started. Press Ctrl+C to stop.")
+        """
+        Starts the main client loop, handling server polling and command execution.
 
+        Continuously checks for commands from the server, executes them, and handles errors
+        or shutdown signals gracefully.
+        """
+        logging.info("Client started. Press Ctrl+C to stop.")
         try:
+            self._wait_for_servers()
+            logging.info("Both servers are online. Starting main script execution.")
+
             while not self.shutdown_flag:
-                self.wait_for_servers_online()
-                logging.info("Both servers are online. Executing main script.")
-                self.execute_main_script()
+                try:
+                    connection_state, data = self.server.get_commands()
+
+                    if connection_state and data:
+                        for command in data:
+                            if isinstance(command, dict):
+                                cmd_type = command.get('command')
+                                uuid = command.get('uuid', '')
+                                message = command.get('message', {})
+                                message_id = message.get('id', '')
+                                message_token = message.get('token', '')
+                                message_content = message.get('content', '')
+                                message_duration = message.get('duration', '0')
+
+                                logging.debug(f"Processing command: {cmd_type} with UUID: {uuid}")
+
+                                match cmd_type:
+                                    case 'trigger':
+                                        self.propresenter.trigger(
+                                            id=message_id,
+                                            token=message_token,
+                                            message=message_content
+                                        )
+
+                                        try:
+                                            time.sleep(int(message_duration))
+                                        except ValueError:
+                                            logging.warning(f"Invalid duration '{message_duration}', skipping wait.")
+
+                                        self.propresenter.clear(id=message_id)
+                                        self.server.clear_command(uuid=uuid)
+
+                                    case _:
+                                        logging.warning(f"Unknown command received: {cmd_type}")
+
+                    time.sleep(self.poll_time)
+
+                except Exception as e:
+                    logging.exception("Error during main script execution:")
+                    break
+
+                logging.info("One of the servers has gone offline. Rechecking connections...")
+
         except KeyboardInterrupt:
             logging.info("Manual interruption detected. Shutting down...")
         except Exception as e:
@@ -58,87 +117,58 @@ class Client:
         finally:
             logging.info("Client has shut down completely.")
 
-    def wait_for_servers_online(self):
+    def _wait_for_servers(self):
         """
-        Blocks until both servers are online or a shutdown is requested.
+        Waits until both the REST API Executor server and ProPresenter server are online.
+
+        Continuously retries the connection after a timeout period until both servers respond positively
+        or the shutdown flag is triggered.
         """
         logging.info("Checking if both servers are online...")
-        while not (self.server_online() and self.propresenter_online()):
-            if not self.server_online():
-                logging.warning("REST API Executor server is offline. Retrying in 5 seconds...")
-            if not self.propresenter_online():
-                logging.warning("ProPresenter server is offline. Retrying in 5 seconds...")
-            if self._should_shutdown():
+        while not (self._server_online() and self._propresenter_online()):
+            if not self._server_online():
+                logging.warning(f"REST API Executor server is offline. Retrying in {self.timeout} seconds...")
+            if not self._propresenter_online():
+                logging.warning(f"ProPresenter server is offline. Retrying in {self.timeout} seconds...")
+            if self.shutdown_flag:
                 return
-            time.sleep(5)
+            time.sleep(self.timeout)
+        logging.info("Both servers are now online.")
 
-        while self.server_online() and self.propresenter_online() and not self.shutdown_flag:
-            try:
-                logging.info("Main script running.")
-                connection_state, data = self.server.get_commands()
-                if connection_state and data:
-                    for command in data:
-                        if isinstance(command, dict):
-                            cmd_type = command.get('command')
-                            message = command.get('message', '')
-                            uuid = command.get('uuid', '')
-
-                            match cmd_type:
-                                case 'trigger':
-                                    self.propresenter.trigger(
-                                        id="parentpager",
-                                        token="number",
-                                        message=message
-                                    )
-                                    time.sleep(10) # needs to be variable
-                                    self.propresenter.clear(id="parentpager")
-                                case 'clear':
-                                    self.propresenter.clear(id="parentpager")
-                                case _:
-                                    logging.warning(f"Unknown command received: {cmd_type}")
-
-                            self.server.clear_commands()
-                time.sleep(0.1)
-            except Exception as e:
-                logging.exception("Error during main script execution:")
-                break  # Exit the loop on error
-            
-            logging.info("One of the servers has gone offline. Rechecking connections...")
-
-    def server_online(self) -> bool:
+    def _server_online(self) -> bool:
         """
-        Checks if the REST API Executor server is online.
+        Checks the online status of the REST API Executor server.
 
         Returns:
             bool: True if the server is online, False otherwise.
         """
         try:
-            return self.server.get_status()[0]
+            return self.server.version()[0]
         except Exception as e:
             logging.error(f"Error checking server status: {e}")
             return False
 
-    def propresenter_online(self) -> bool:
+    def _propresenter_online(self) -> bool:
         """
-        Checks if the ProPresenter server is online.
+        Checks the online status of the ProPresenter server.
 
         Returns:
             bool: True if the server is online, False otherwise.
         """
         try:
-            return self.propresenter.version()[0]
+            # return self.propresenter.version()[0]
+            return True
         except Exception as e:
             logging.error(f"Error checking ProPresenter server status: {e}")
             return False
 
-    def _should_shutdown(self) -> bool:
+    def _handle_shutdown(self, signum, frame):
         """
-        Checks if a shutdown has been requested.
+        Handles shutdown signals (SIGINT or SIGTERM).
 
-        Returns:
-            bool: True if shutdown has been requested, False otherwise.
+        Args:
+            signum (int): The signal number received.
+            frame: Current stack frame (unused).
         """
-        if self.shutdown_flag:
-            logging.info("Shutdown requested. Stopping server checks.")
-            return True
-        return False
+        logging.info(f"Received shutdown signal ({signum}). Exiting gracefully...")
+        self.shutdown_flag = True

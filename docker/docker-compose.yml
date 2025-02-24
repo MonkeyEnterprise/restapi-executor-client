@@ -16,3 +16,5 @@ services:
       - PROPRESENTER_URL=http://localhost:5000
       - API_KEY=your_secret_api_key
       - DEBUG=true
+      - SERVER_TIMEOUT=5
+      - POLL_TIME=5
