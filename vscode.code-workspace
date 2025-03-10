@@ -14,7 +14,8 @@
 	"settings": {
 		"cSpell.ignoreWords": [
 			"propresenter",
-			"levelname"
+			"levelname",
+			"restapi"
 		]
 	}
 }

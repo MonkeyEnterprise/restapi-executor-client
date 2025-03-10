@@ -1,5 +1,5 @@
 # REST API Executor Client v1.0.0
-![REST API Executor Server](assets/api-rest-log.png "REST API Executor Server")
+![REST API ParentPager Client](assets/api-rest-log.png "REST API ParentPager Client")
 
 ## **1. How to Start the Docker Container**
 
@@ -46,5 +46,5 @@ docker-compose up -d
 To check the logs of the running API server:
 
 ```bash
-docker logs -f propresenter_message_client
+docker logs -f restapi_executor_client
 ```

@@ -5,48 +5,26 @@
 #
 ##
 
-from .propresenter import ProPresenter
-from .server import Server
+
 import logging
 import time
 import signal
-
-__VERSION__: str = "1.0.0"
+from typing import Tuple, Any
+from .api_propresenter import ProPresenterAPI
+from .api_executor import ExecutorAPI
 
 class Client:
-    """
-    A client that manages communication between a REST API Executor server and a ProPresenter server.
-
-    This client continuously polls for commands from the server and executes them on the ProPresenter.
-    It handles shutdown signals and server connectivity checks.
-
-    Attributes:
-        server (Server): Instance for handling server communication.
-        propresenter (ProPresenter): Instance for interacting with ProPresenter.
-        timeout (int): Time (in seconds) to wait before retrying server connection.
-        poll_time (int): Time (in seconds) between consecutive command polls.
-        shutdown_flag (bool): Flag to indicate shutdown status.
-    """
-
+    
+    VERSION: str = "1.0.0"
+    
     def __init__(self, server_url: str, propresenter_url: str, api_key: str, timeout: int, poll_time: int, debug: bool) -> None:
-        """
-        Initializes the Client instance with server and ProPresenter URLs, API key, and settings.
-
-        Args:
-            server_url (str): URL of the REST API Executor server.
-            propresenter_url (str): URL of the ProPresenter server.
-            api_key (str): API key for server authentication.
-            timeout (int): Timeout in seconds for server connection retries.
-            poll_time (int): Time in seconds between command polling.
-            debug (bool): Flag to enable debug-level logging.
-        """
         log_level = logging.DEBUG if debug else logging.INFO
         logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
 
-        logging.info(f"Initializing ProPresenter client version {__VERSION__}")
+        logging.info(f"Initializing ProPresenter client version {self.VERSION}")
         
-        self.server = Server(server_url, api_key)
-        self.propresenter = ProPresenter(propresenter_url)
+        self.executor_api = ExecutorAPI(server_url, api_key)
+        self.propresenter = ProPresenterAPI(propresenter_url)
         self.timeout = timeout
         self.poll_time = poll_time
         self.shutdown_flag = False
@@ -55,12 +33,6 @@ class Client:
         signal.signal(signal.SIGTERM, self._handle_shutdown)
 
     def run(self) -> None:
-        """
-        Starts the main client loop, handling server polling and command execution.
-
-        Continuously checks for commands from the server, executes them, and handles errors
-        or shutdown signals gracefully.
-        """
         logging.info("Client started. Press Ctrl+C to stop.")
         try:
             self._wait_for_servers()
@@ -68,37 +40,21 @@ class Client:
 
             while not self.shutdown_flag:
                 try:
-                    connection_state, data = self.server.get_commands()
+                    connection_state, data = self.executor_api.get_commands()
 
-                    if connection_state and data:
+                    if connection_state and isinstance(data, list):
                         for command in data:
                             if isinstance(command, dict):
                                 cmd_type = command.get('command')
                                 uuid = command.get('uuid', '')
-                                message = command.get('message', {})
-                                message_id = message.get('id', '')
-                                message_token = message.get('token', '')
-                                message_content = message.get('content', '')
-                                message_duration = message.get('duration', '0')
 
                                 logging.debug(f"Processing command: {cmd_type} with UUID: {uuid}")
 
                                 match cmd_type:
                                     case 'trigger':
-                                        self.propresenter.trigger(
-                                            id=message_id,
-                                            token=message_token,
-                                            message=message_content
-                                        )
-
-                                        try:
-                                            time.sleep(int(message_duration))
-                                        except ValueError:
-                                            logging.warning(f"Invalid duration '{message_duration}', skipping wait.")
-
-                                        self.propresenter.clear(id=message_id)
-                                        self.server.clear_command(uuid=uuid)
-
+                                        self._handle_trigger_command(command, uuid)
+                                    case 'clear':
+                                        self._handle_clear_command(command, uuid)
                                     case _:
                                         logging.warning(f"Unknown command received: {cmd_type}")
 
@@ -108,67 +64,80 @@ class Client:
                     logging.exception("Error during main script execution:")
                     break
 
-                logging.info("One of the servers has gone offline. Rechecking connections...")
-
         except KeyboardInterrupt:
             logging.info("Manual interruption detected. Shutting down...")
-        except Exception as e:
-            logging.error(f"Unexpected error: {e}")
         finally:
             logging.info("Client has shut down completely.")
 
-    def _wait_for_servers(self):
-        """
-        Waits until both the REST API Executor server and ProPresenter server are online.
-
-        Continuously retries the connection after a timeout period until both servers respond positively
-        or the shutdown flag is triggered.
-        """
-        logging.info("Checking if both servers are online...")
-        while not (self._server_online() and self._propresenter_online()):
-            if not self._server_online():
-                logging.warning(f"REST API Executor server is offline. Retrying in {self.timeout} seconds...")
-            if not self._propresenter_online():
-                logging.warning(f"ProPresenter server is offline. Retrying in {self.timeout} seconds...")
-            if self.shutdown_flag:
+    def _handle_trigger_command(self, data: dict, uuid: str) -> None:
+        try:
+            message = data.get("message", {})
+            if not isinstance(message, dict):
+                logging.error(f"Invalid 'message' format. UUID: {uuid}")
                 return
+
+            message_id = str(message.get('id', '')).strip()
+            message_token = str(message.get('token', '')).strip()
+            message_content = str(message.get('content', '')).strip()
+            message_duration = message.get('duration')
+
+            if not message_id or not message_token or not message_content or not isinstance(message_duration, (int, float)) or message_duration <= 0:
+                logging.error("Invalid message data received.")
+                return
+
+            logging.info(f"Triggering message: {message_content} with ID: {message_id}")
+            self.propresenter.trigger(id=message_id, token=message_token, message=message_content)
+
+            time.sleep(int(message_duration))  
+
+            self.propresenter.clear(id=message_id)
+            self.executor_api.clear_commands()
+
+        except Exception as e:
+            logging.exception("Error processing trigger command.")
+
+    def _handle_clear_command(self, data: dict, uuid: str) -> None:
+        try:
+            message = data.get("message", {})
+            if not isinstance(message, dict):
+                logging.error(f"Invalid 'message' format. UUID: {uuid}")
+                return
+
+            message_id = message.get('id', '').strip()
+            if not message_id:
+                logging.error("Invalid message ID.")
+                return
+
+            logging.info(f"Clearing message with ID: {message_id}")
+            self.propresenter.clear(id=message_id)
+            self.executor_api.clear_commands()
+
+        except Exception as e:
+            logging.exception("Error processing clear command.")
+
+    def _wait_for_servers(self):
+        logging.info("Checking if both servers are online...")
+        while not (self._executor_api_online() and self._propresenter_online()):
+            logging.warning("Waiting for servers to come online...")
             time.sleep(self.timeout)
         logging.info("Both servers are now online.")
 
-    def _server_online(self) -> bool:
-        """
-        Checks the online status of the REST API Executor server.
-
-        Returns:
-            bool: True if the server is online, False otherwise.
-        """
+    def _executor_api_online(self) -> bool:
         try:
-            return self.server.version()[0]
+            return self.executor_api.version()[0]
         except Exception as e:
-            logging.error(f"Error checking server status: {e}")
+            logging.error(f"Error checking ExecutorAPI server status: {e}")
             return False
 
     def _propresenter_online(self) -> bool:
-        """
-        Checks the online status of the ProPresenter server.
-
-        Returns:
-            bool: True if the server is online, False otherwise.
-        """
         try:
-            # return self.propresenter.version()[0]
-            return True
+            success, data = self.propresenter.version()
+            logging.error(f"{success}, {data}")
+            return success and isinstance(data, dict)
         except Exception as e:
             logging.error(f"Error checking ProPresenter server status: {e}")
             return False
 
     def _handle_shutdown(self, signum, frame):
-        """
-        Handles shutdown signals (SIGINT or SIGTERM).
-
-        Args:
-            signum (int): The signal number received.
-            frame: Current stack frame (unused).
-        """
         logging.info(f"Received shutdown signal ({signum}). Exiting gracefully...")
         self.shutdown_flag = True

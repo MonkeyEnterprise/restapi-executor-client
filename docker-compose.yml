@@ -1,0 +1,28 @@
+##
+#
+# Copyright (c) 2025, Lorenzo Pouw.
+# All rights reserved.
+#
+##
+
+services:
+  restapi_executor:
+    image: python:3.13-slim
+    container_name: restapi_executor_client
+    working_dir: /app
+    volumes:
+      - ./app:/app
+    environment:
+      - SERVER_URL=https://apiexecutor.pouwertronics.nl
+      - PROPRESENTER_URL=http://host.docker.internal:5000
+      - SERVER_TIMEOUT=5
+      - POLL_TIME=5
+      - API_KEY=your_secret_api_key
+      - DEBUG=true
+    command: >
+      /bin/sh -c "
+      pip install --root-user-action=ignore --upgrade pip &&
+      pip install --root-user-action=ignore --no-cache-dir -r requirements.txt &&
+      python main.py
+      "
+    restart: always
