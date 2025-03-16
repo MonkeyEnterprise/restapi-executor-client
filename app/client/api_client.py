@@ -30,11 +30,7 @@ class ClientAPI:
                 case "POST":
                     logging.debug(f"Sending POST request to: {url} with data: {data}")
                     response = requests.post(url, **request_data)
-
-                case "DELETE":
-                    logging.debug(f"Sending DELETE request to: {url} with data: {data}")
-                    response = requests.delete(url, **request_data)
-
+                    
                 case _:
                     logging.error(f"Unsupported HTTP method: {method}")
                     return False, None
@@ -63,4 +59,4 @@ class ClientAPI:
         return self._make_request('POST', endpoint, data=data, status_codes=status_codes)
 
     def delete(self, endpoint: str, data: Optional[Dict[str, Any]] = None, status_codes: List[int] = [200, 204]) -> Tuple[bool, Any]:
-        return self._make_request('DELETE', endpoint, data=data, status_codes=status_codes)
+        return self._make_request('POST', endpoint, data=data, status_codes=status_codes)

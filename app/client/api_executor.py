@@ -12,9 +12,8 @@ from typing import Tuple, Any
 class ExecutorAPI(ClientAPI):
 
     ENDPOINT_VERSION: str = "/api/v1"
-    ENDPOINT_GET_COMMANDS: str = "/api/v1/commands"
-    ENDPOINT_CLEAR_COMMANDS: str = "/api/v1/commands"
-    ENDPOINT_CLEAR_COMMAND: str = "/api/v1/command"
+    ENDPOINT_GET_COMMANDS: str = "/api/v1/queue/list"
+    ENDPOINT_CLEAR_COMMANDS: str = "/api/v1/queue/delete"
     
     def __init__(self, server_url: str, api_key: str, timeout: int = 5) -> None:
         super().__init__(server_url, headers={'X-API-Key': api_key}, timeout=timeout)
@@ -30,5 +29,5 @@ class ExecutorAPI(ClientAPI):
 
     def clear_command(self, uuid: str) -> Tuple[bool, Any]:    
         data = {"uuid": uuid}
-        return self.delete(endpoint=self.ENDPOINT_CLEAR_COMMAND, data=data, status_codes=[200, 204])
+        return self.delete(endpoint=self.ENDPOINT_CLEAR_COMMANDS, data=data, status_codes=[200, 204])
 

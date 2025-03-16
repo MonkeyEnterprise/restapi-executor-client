@@ -29,7 +29,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--api_key",
         type=str,
-        default=os.getenv("API_KEY", "c21fbc8a-1df5-4ed1-b7eb-1ee829511b1d"),
+        default=os.getenv("API_KEY", "bd352a4f838f4ce6ff72c84b69470948"),
         help="API Key for server authentication (default from API_KEY environment variable)."
     )
     parser.add_argument(
@@ -48,7 +48,7 @@ def get_args() -> argparse.Namespace:
         "--poll_time",
         type=int,
         default=int(os.getenv("POLL_TIME", 5)),
-        help="Polling interval time in seconds for checking server updates (default from POLL_TIME environment variable)."
+        help="Polling interval time in seconds for checking server updates (default from POLL_TIME environment variablepytho)."
     )
     
     args, _ = parser.parse_known_args()

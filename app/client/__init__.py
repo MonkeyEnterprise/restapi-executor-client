@@ -91,7 +91,7 @@ class Client:
             time.sleep(int(message_duration))  
 
             self.propresenter.clear(id=message_id)
-            self.executor_api.clear_commands()
+            self.executor_api.clear_command(uuid)
 
         except Exception as e:
             logging.exception("Error processing trigger command.")
