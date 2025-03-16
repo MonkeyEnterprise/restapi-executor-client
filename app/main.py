@@ -29,7 +29,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--api_key",
         type=str,
-        default=os.getenv("API_KEY", "bd352a4f838f4ce6ff72c84b69470948"),
+        default=os.getenv("API_KEY", ""),
         help="API Key for server authentication (default from API_KEY environment variable)."
     )
     parser.add_argument(
